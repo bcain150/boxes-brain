@@ -11,4 +11,5 @@ wireless xbox controller dongle
 ros distro
 - use ros2 jazzy
 - had to reflash pi's os with ubuntu 24.04 because I didn't want to have to deal with docker containers
-
+- followed (https://docs.ros.org/en/jazzy/How-To-Guides/Installing-on-Raspberry-Pi.html#ubuntu-linux-on-raspberry-pi-with-binary-ros-2-install)[these instructions]
+- also (https://docs.ros.org/en/jazzy/How-To-Guides/Installing-on-Raspberry-Pi.html#ubuntu-linux-on-raspberry-pi-with-binary-ros-2-install)[these]
