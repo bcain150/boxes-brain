@@ -15,7 +15,7 @@ setup(
     zip_safe=True,
     maintainer='bcain',
     maintainer_email='bcain150@gmail.com',
-    description='TODO: Package description',
+    description='Implements communication with xbox controller over Game Input Protocol using xone kernel driver',
     license='TODO: License declaration',
     extras_require={
         'test': [
@@ -24,6 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            "xbox_control_interface = teleop.xbox_interface_node:main"
         ],
     },
 )

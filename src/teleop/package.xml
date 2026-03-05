@@ -3,7 +3,7 @@
 <package format="3">
   <name>teleop</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>Implements communication with xbox controller over Game Input Protocol using xone kernel driver</description>
   <maintainer email="bcain150@gmail.com">bcain</maintainer>
   <license>TODO: License declaration</license>
 
