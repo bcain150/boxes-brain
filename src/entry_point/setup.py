@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'telop'
+package_name = 'entry_point'
 
 setup(
     name=package_name,
