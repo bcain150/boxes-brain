@@ -15,7 +15,7 @@ setup(
     zip_safe=True,
     maintainer='bcain',
     maintainer_email='bcain150@gmail.com',
-    description='TODO: Package description',
+    description='shared python files for boxes control code',
     license='TODO: License declaration',
     extras_require={
         'test': [

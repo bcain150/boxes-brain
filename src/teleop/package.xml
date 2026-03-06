@@ -9,7 +9,9 @@
 
   <depend>rclpy</depend>
 
-  <exec_depend>evdev</exec_depend>
+  <exec_depend>python3-evdev</exec_depend>
+  <exec_depend>boxes_interfaces</exec_depend>
+  <exec_depend>boxes_utils</exec_depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
