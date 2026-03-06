@@ -2,6 +2,7 @@ Walker's Ghost Robot Boxes:
 
 - we should add a PID tuning state which allows the user to tune pids with the bumpers?
     - alternatively it could auto tune using a commonly know PID tuning algorithm. Can't remember which one this is
+
 - Need to figure out the mapping of buttons here is current brain dump:
     Tank Control: left stick drives left wheel, right stick drives right wheel
     Hold Middle Button: -> Connect/Disconnect, include haptic feedback
