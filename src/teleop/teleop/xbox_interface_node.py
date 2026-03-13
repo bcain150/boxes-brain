@@ -96,7 +96,8 @@ class XboxControllerInterface(Node):
     
     def send_teleop(self):
         # TODO read from state and publish teleop here
-        
+        pass
+
 
 def main(args=None):
     print("Starting Node...")
