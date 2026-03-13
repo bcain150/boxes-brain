@@ -3,6 +3,7 @@ from evdev import InputDevice, InputEvent, list_devices, ecodes
 import time
 import threading
 from enum import Enum
+from typing import Set
 
 VENDOR_ID = 0x045e      # microsoft vendor id
 PRODUCT_IDS = [0x0b12, 0x02ea]     # xbox controller product ids
@@ -33,13 +34,20 @@ class Button(Enum):
     RIGHT_TRIGGER = (ecodes.EV_ABS, ecodes.ABS_RZ)
 
     # Bumpers
-    LEFT_BUMPER = (ecodes.EV_KEY, ecodes.TL)
-    RIGHT_BUMPER = (ecodes.EV_KEY, ecodes.TR)
+    LEFT_BUMPER = (ecodes.EV_KEY, ecodes.BTN_TL)
+    RIGHT_BUMPER = (ecodes.EV_KEY, ecodes.BTN_TR)
 
     # Other
     SELECT = (ecodes.EV_KEY, ecodes.BTN_SELECT)
     START = (ecodes.EV_KEY, ecodes.BTN_START)
     XBOX = (ecodes.EV_KEY, ecodes.BTN_MODE)
+
+    # TODO: implement these
+    def get_keys(self) -> Set[]:
+        pass
+
+    def get_abs(self) -> Set[]:
+        pass
 
 
 class ControllerState:
