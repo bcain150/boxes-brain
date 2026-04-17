@@ -15,7 +15,7 @@ setup(
     zip_safe=True,
     maintainer='bcain',
     maintainer_email='bcain150@gmail.com',
-    description='TODO: Package description',
+    description='Implements communication with the flipsky ESC over pi5 UART',
     license='TODO: License declaration',
     extras_require={
         'test': [
@@ -24,6 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            "motor_control = speed.motor_control_node:main"
         ],
     },
 )

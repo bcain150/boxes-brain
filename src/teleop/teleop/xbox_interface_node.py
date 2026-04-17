@@ -104,7 +104,7 @@ class XboxControllerInterface(Node):
         pass
 
 def main(args=None):
-    print("Starting Node...")
+    print("Starting Xbox Interface Node...")
     rclpy.init(args=args)
     xbox_node = XboxControllerInterface()
 
