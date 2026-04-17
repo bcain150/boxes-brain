@@ -3,7 +3,6 @@ from evdev import InputDevice, InputEvent, list_devices, ecodes
 import time
 import threading
 from enum import Enum
-from typing import Set
 
 VENDOR_ID = 0x045e      # microsoft vendor id
 PRODUCT_IDS = [0x0b12, 0x02ea]     # xbox controller product ids
@@ -42,19 +41,40 @@ class Button(Enum):
     START = (ecodes.EV_KEY, ecodes.BTN_START)
     XBOX = (ecodes.EV_KEY, ecodes.BTN_MODE)
 
-    # TODO: implement these
-    def get_keys(self) -> Set[]:
-        pass
+    @classmethod
+    def get_keys(cls):
+        """Get a Set of Key based control Buttons"""
+        return {
+            cls.LEFT_STICK_PRESS,
+            cls.RIGHT_STICK_PRESS,
+            cls.X,
+            cls.Y,
+            cls.A,
+            cls.B,
+            cls.LEFT_BUMPER,
+            cls.RIGHT_BUMPER,
+            cls.SELECT,
+            cls.START,
+            cls.XBOX,
+        }
 
-    def get_abs(self) -> Set[]:
-        pass
+    def get_abs(cls):
+        """Get a Set of ABS based control Buttons"""
+        return {
+            cls.LEFT_STICK_Y,
+            cls.LEFT_STICK_X,
+            cls.RIGHT_STICK_Y,
+            cls.RIGHT_STICK_X,
+            cls.LEFT_RIGHT,
+            cls.UP_DOWN,
+        }
 
 
 class ControllerState:
     """Threadsafe mapping used to update and grab the internal state of the controller
     Only for use within the xbox interface node."""
     def __init__(self, device: InputDevice, node_logger):
-        self._lock = threading.lock()
+        self._lock = threading.RLock()
         self._state = {}
         self._build_from_capabilities(device)
         self.logger = node_logger

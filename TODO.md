@@ -32,4 +32,9 @@ Walker's Ghost Robot Boxes:
         - fell over in a weird position
         - a node died
         - in sleep mode and a distruption is detected
-        NOTE: can only get out of disabled mode by being connected 
+        NOTE: can only get out of disabled mode by being connected
+
+- GOAL for 4/17:
+   - get flipsky coms over uart working
+   - implement node for controlling esc and motors
+   - communicate from xbox-interface-node to motor node or whatever name I give it

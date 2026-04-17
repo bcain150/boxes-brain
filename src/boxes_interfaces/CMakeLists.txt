@@ -14,8 +14,9 @@ find_package(std_msgs REQUIRED)
 # find_package(<dependency> REQUIRED)
 
 set(msg_files
-  "msg/XboxInput.msg"
+  "msg/XboxVelocityInput.msg"
   "msg/XboxOutput.msg"
+  "msg/XboxButtonInput.msg"
 )
 
 # set(srv_files

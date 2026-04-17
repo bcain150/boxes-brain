@@ -15,7 +15,7 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy import logging as ros_logger
 
-from boxes_interfaces.msg import XboxVelocityInput, XboxOutput
+from boxes_interfaces.msg import XboxVelocityInput, XboxOutput, XboxButtonInput
 from boxes_utils import VOLATILE_QOS, format_error_message
 
 from teleop.controller import (
@@ -34,11 +34,15 @@ class XboxControllerInterface(Node):
         self.controller_read_timer = self.create_timer(0, self.read_controller)
         self.teleop_publishing_timer = self.create_timer(INPUT_PUBLISHING_RATE_S, self.send_teleop)
 
-        self.teleop_publisher = self.create_publisher(
+        self.teleop_move_publisher = self.create_publisher(
             msg_type=XboxVelocityInput,
-            topic="controller_input",
+            topic="controller_move_state",
             qos_profile=VOLATILE_QOS,
             callback_group=MutuallyExclusiveCallbackGroup()
+        )
+        self.teleop_button_publisher = self.create_publisher(
+            msg_type=XboxButtonInput,
+            topic="controller_button_state"
         )
 
         # allows other nodes to provide feedback
@@ -95,16 +99,16 @@ class XboxControllerInterface(Node):
         pass
     
     def send_teleop(self):
-        # TODO read from state and publish teleop here
+        # TODO read from state and publish to both topics depending on the topic.
+        # Consider a single topic for simplicities sake
         pass
-
 
 def main(args=None):
     print("Starting Node...")
     rclpy.init(args=args)
     xbox_node = XboxControllerInterface()
 
-    # TODO: think about what this should be? 
+    # TODO: think about how many threads
     executor = MultiThreadedExecutor(num_threads=2)
     executor.add_node(xbox_node)
     xbox_node.get_logger().info("Xbox Control Interface Initialized.")
