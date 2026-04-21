@@ -7,7 +7,7 @@ import struct
 import time
 
 from typing import Optional
-from enum import Enum
+from enum import IntEnum
 from pathlib import Path
 import functools
 
@@ -19,22 +19,13 @@ UARTDevice = Path | str
 ERPM_MIN  =  900
 ERPM_MAX  = 8700
 
-class CommandValues(Enum):
+BYTE_FORMAT = '>Bi'
+
+class CommandValues(IntEnum):
     SET_RPM = 0x08
     SET_CURRENT = 0x06  # used only for stop (0A)
     GET_VALUES  = 0x04
     FORWARD_CAN = 0x22
-
-# ── CRC-CCITT ──────────────────────────────────────────────────────────────────
-def crc16(data: bytes) -> int:
-    crc = 0x0000
-    poly = 0x1021
-    for byte in data:
-        crc ^= byte << 8
-        for _ in range(8):
-            crc = (crc << 1) ^ poly if crc & 0x8000 else crc << 1
-            crc &= 0xFFFF
-    return crc
 
 
 def connection_guard(method):
@@ -81,21 +72,55 @@ class VescCommandInterface:
         return
     
     @connection_guard
-    def stop_all(self):
-        pass
-    
+    def stop_single(self, to_can: bool=False):
+        """Stop a single motor. Optionally send this command via CAN forwarding to a separate motor."""
+        payload = struct.pack(BYTE_FORMAT, CommandValues.SET_CURRENT, 0)
+        if to_can:
+            assert self.has_can, "Can forwarding requested but no can id exists!"
+            payload = self._with_can_forward(payload=payload)
+        self._build_and_send_packet(payload=payload)
+
     @connection_guard
-    def set_rpm(self):
-        pass
+    def stop_all(self):
+        """Stop both motors immediately. Includes forwarding over can bus"""
+        payload = struct.pack(BYTE_FORMAT, CommandValues.SET_CURRENT, 0)
+        if self.has_can:
+            can_payload = self._with_can_forward(payload=payload)
+            self._build_and_send_packet(payload=can_payload)
+        self._build_and_send_packet(payload=payload)
+
+
+    @connection_guard
+    def set_rpm(self, rpm: int, to_can: bool=False):
+        """Set the RPM of a motor. Optionally send this command via CAN forwarding to a separate motor."""
+        payload = struct.pack(BYTE_FORMAT, CommandValues.SET_RPM, rpm)
+        if to_can:
+            assert self.has_can, "Can forwarding requested but no can id exists!"
+            payload = self._with_can_forward(payload=payload)
+        self._build_and_send_packet(payload=payload)
     
     @connection_guard
     def get_status(self):
         pass
 
-    # ── Packet builder ─────────────────────────────────────────────────────────────
-    def _build_packet(self, payload: bytes) -> bytes:
+    # ── Packet helpers ─────────────────────────────────────────────────────────────
+
+    def _build_and_send_packet(self, payload: bytes) -> bytes:
+        """build the complete packet with CRC-CCITT error correcting code.
+        Then send over the serial connection. (Assumes connected)"""
+        def crc16(data):
+            """build the CRC-CCITT error correcting code"""
+            crc = 0x0000
+            poly = 0x1021
+            for byte in data:
+                crc ^= byte << 8
+                for _ in range(8):
+                    crc = (crc << 1) ^ poly if crc & 0x8000 else crc << 1
+                    crc &= 0xFFFF
+            return crc
         crc = crc16(payload)
-        return bytes([0x02, len(payload)]) + payload + bytes([crc >> 8, crc & 0xFF, 0x03])
+        packet = bytes([0x02, len(payload)]) + payload + bytes([crc >> 8, crc & 0xFF, 0x03])
+        self._serial.write(packet)
 
     def _with_can_forward(self, payload: bytes) -> bytes:
         return bytes([CommandValues.FORWARD_CAN, self.secondary_can_id]) + payload
