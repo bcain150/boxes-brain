@@ -38,10 +38,11 @@ ERPM_STEP = 1500  # step size for ramp
 # ── CRC-CCITT ──────────────────────────────────────────────────────────────────
 def crc16(data: bytes) -> int:
     crc = 0x0000
+    poly = 0x1021
     for byte in data:
         crc ^= byte << 8
         for _ in range(8):
-            crc = (crc << 1) ^ 0x1021 if crc & 0x8000 else crc << 1
+            crc = (crc << 1) ^ poly if crc & 0x8000 else crc << 1
             crc &= 0xFFFF
     return crc
 
@@ -126,7 +127,7 @@ def stop_all(ser):
     ser.write(cmd_stop(can_id=LEFT_CAN_ID))
     print("Motors stopped.")
 
-def get_values(ser, can_id: int = None, timeout: float = 0.5) -> dict:
+def get_values(ser: serial.Serial, can_id: int = None, timeout: float = 0.5) -> dict:
     ser.reset_input_buffer()
     ser.write(cmd_get_values(can_id=can_id))
     time.sleep(timeout)
