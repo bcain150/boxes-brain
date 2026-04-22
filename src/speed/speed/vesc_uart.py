@@ -20,7 +20,9 @@ ConverterFunc = Callable[['FieldMask', Optional[int]], int|float]
 ERPM_MIN  =  900
 ERPM_MAX  = 8700
 
-BYTE_FORMAT = '>Bi'
+_16_BYTE_FORMAT = '>Bi'
+_32_BYTE_FORMAT = '>BI'
+
 
 class CommandByte(IntEnum):
     """Commands pulled from dataclasses.h from vedderb/bldc"""
@@ -194,7 +196,7 @@ class VescCommandInterface:
     @connection_guard
     def stop_single(self, to_can: bool=False):
         """Stop a single motor. Optionally send this command via CAN forwarding to a separate motor."""
-        payload = struct.pack(BYTE_FORMAT, CommandByte.SET_CURRENT, 0)
+        payload = struct.pack(_16_BYTE_FORMAT, CommandByte.SET_CURRENT, 0)
         if to_can:
             assert self.has_can, "Can forwarding requested but no can id exists!"
             payload = self._with_can_forward(payload=payload)
@@ -203,7 +205,7 @@ class VescCommandInterface:
     @connection_guard
     def stop_all(self):
         """Stop both motors immediately. Includes forwarding over can bus"""
-        payload = struct.pack(BYTE_FORMAT, CommandByte.SET_CURRENT, 0)
+        payload = struct.pack(_16_BYTE_FORMAT, CommandByte.SET_CURRENT, 0)
         if self.has_can:
             can_payload = self._with_can_forward(payload=payload)
             self._build_and_send_packet(payload=can_payload)
@@ -214,7 +216,7 @@ class VescCommandInterface:
     def set_rpm(self, rpm: int, to_can: bool=False):
         """Set the RPM of a motor. Optionally send this command via CAN forwarding to a separate motor."""
         # TODO: figure out if we can set negative rpms
-        payload = struct.pack(BYTE_FORMAT, CommandByte.SET_RPM, rpm)
+        payload = struct.pack(_16_BYTE_FORMAT, CommandByte.SET_RPM, rpm)
         if to_can:
             assert self.has_can, "Can forwarding requested but no can id exists!"
             payload = self._with_can_forward(payload=payload)
@@ -226,7 +228,7 @@ class VescCommandInterface:
         # get the FieldMask from the set of fields and construct the payload for the command
         fields = set(fields)
         field_mask = FieldMask.from_fields(fields)
-        payload = struct.pack(BYTE_FORMAT, CommandByte.GET_VALUES_SELECTIVE, field_mask)
+        payload = struct.pack(_32_BYTE_FORMAT, CommandByte.GET_VALUES_SELECTIVE, field_mask)
         # send with can forwarding if the secondary motor
         if to_can:
             assert self.has_can, "Can forwarding requested but no can id exists!"
