@@ -21,17 +21,17 @@ import serial
 import struct
 import time
 
-UART_PORT    = "/dev/ttyAMA0"
-BAUD_RATE    = 115200
-LEFT_CAN_ID  = 96
+UART_PORT = "/dev/ttyAMA0"
+BAUD_RATE = 115200
+LEFT_CAN_ID = 96
 
-COMM_SET_RPM     = 0x08
+COMM_SET_RPM = 0x08
 COMM_SET_CURRENT = 0x06  # used only for stop (0A)
-COMM_GET_VALUES  = 0x04
+COMM_GET_VALUES = 0x04
 COMM_FORWARD_CAN = 0x22
 
-ERPM_MIN  =  900
-ERPM_MAX  = 8700
+ERPM_MIN = 900
+ERPM_MAX = 8700
 ERPM_STEP = 1500  # step size for ramp
 
 
@@ -52,23 +52,26 @@ def build_packet(payload: bytes) -> bytes:
     crc = crc16(payload)
     return bytes([0x02, len(payload)]) + payload + bytes([crc >> 8, crc & 0xFF, 0x03])
 
+
 def with_can_forward(can_id: int, payload: bytes) -> bytes:
     return bytes([COMM_FORWARD_CAN, can_id]) + payload
 
 
 # ── Commands ───────────────────────────────────────────────────────────────────
 def cmd_set_rpm(rpm: int, can_id: int = None) -> bytes:
-    payload = struct.pack('>Bi', COMM_SET_RPM, rpm)
+    payload = struct.pack(">Bi", COMM_SET_RPM, rpm)
     if can_id is not None:
         payload = with_can_forward(can_id, payload)
     return build_packet(payload)
 
+
 def cmd_stop(can_id: int = None) -> bytes:
     """Zero current — cleanest way to stop."""
-    payload = struct.pack('>Bi', COMM_SET_CURRENT, 0)
+    payload = struct.pack(">Bi", COMM_SET_CURRENT, 0)
     if can_id is not None:
         payload = with_can_forward(can_id, payload)
     return build_packet(payload)
+
 
 def cmd_get_values(can_id: int = None) -> bytes:
     payload = bytes([COMM_GET_VALUES])
@@ -82,7 +85,7 @@ def parse_get_values(data: bytes):
     if len(data) < 7 or data[0] != 0x02 or data[-1] != 0x03:
         return None
     length = data[1]
-    payload = data[2:2 + length]
+    payload = data[2 : 2 + length]
     crc_recv = (data[2 + length] << 8) | data[3 + length]
     if crc16(payload) != crc_recv:
         print("  CRC mismatch!")
@@ -91,30 +94,43 @@ def parse_get_values(data: bytes):
         return None
     p = payload[1:]
     idx = 0
+
     def read_i16():
-        nonlocal idx; v = struct.unpack_from('>h', p, idx)[0]; idx += 2; return v
+        nonlocal idx
+        v = struct.unpack_from(">h", p, idx)[0]
+        idx += 2
+        return v
+
     def read_i32():
-        nonlocal idx; v = struct.unpack_from('>i', p, idx)[0]; idx += 4; return v
+        nonlocal idx
+        v = struct.unpack_from(">i", p, idx)[0]
+        idx += 4
+        return v
+
     def read_u8():
-        nonlocal idx; v = p[idx]; idx += 1; return v
+        nonlocal idx
+        v = p[idx]
+        idx += 1
+        return v
+
     try:
         return {
-            'temp_fet':          read_i16() / 10.0,
-            'temp_motor':        read_i16() / 10.0,
-            'avg_motor_current': read_i32() / 100.0,
-            'avg_input_current': read_i32() / 100.0,
-            'avg_id':            read_i32() / 100.0,
-            'avg_iq':            read_i32() / 100.0,
-            'duty_now':          read_i16() / 1000.0,
-            'rpm':               read_i32(),
-            'v_in':              read_i16() / 10.0,
-            'amp_hours':         read_i32() / 10000.0,
-            'amp_hours_charged': read_i32() / 10000.0,
-            'watt_hours':        read_i32() / 10000.0,
-            'watt_hours_charged':read_i32() / 10000.0,
-            'tachometer':        read_i32(),
-            'tachometer_abs':    read_i32(),
-            'fault_code':        read_u8(),
+            "temp_fet": read_i16() / 10.0,
+            "temp_motor": read_i16() / 10.0,
+            "avg_motor_current": read_i32() / 100.0,
+            "avg_input_current": read_i32() / 100.0,
+            "avg_id": read_i32() / 100.0,
+            "avg_iq": read_i32() / 100.0,
+            "duty_now": read_i16() / 1000.0,
+            "rpm": read_i32(),
+            "v_in": read_i16() / 10.0,
+            "amp_hours": read_i32() / 10000.0,
+            "amp_hours_charged": read_i32() / 10000.0,
+            "watt_hours": read_i32() / 10000.0,
+            "watt_hours_charged": read_i32() / 10000.0,
+            "tachometer": read_i32(),
+            "tachometer_abs": read_i32(),
+            "fault_code": read_u8(),
         }
     except Exception as e:
         print(f"  Parse error: {e}")
@@ -127,6 +143,7 @@ def stop_all(ser):
     ser.write(cmd_stop(can_id=LEFT_CAN_ID))
     print("Motors stopped.")
 
+
 def get_values(ser: serial.Serial, can_id: int = None, timeout: float = 0.5) -> dict:
     ser.reset_input_buffer()
     ser.write(cmd_get_values(can_id=can_id))
@@ -134,18 +151,23 @@ def get_values(ser: serial.Serial, can_id: int = None, timeout: float = 0.5) -> 
     raw = ser.read(ser.in_waiting)
     return parse_get_values(raw) if raw else None
 
+
 def print_values(label: str, v: dict):
     if v:
-        print(f"  {label}: RPM={v['rpm']:6}  VBAT={v['v_in']:.1f}V  "
-              f"FET={v['temp_fet']:.1f}°C  Motor={v['temp_motor']:.1f}°C  "
-              f"Fault={v['fault_code']}")
+        print(
+            f"  {label}: RPM={v['rpm']:6}  VBAT={v['v_in']:.1f}V  "
+            f"FET={v['temp_fet']:.1f}°C  Motor={v['temp_motor']:.1f}°C  "
+            f"Fault={v['fault_code']}"
+        )
     else:
         print(f"  {label}: no response")
+
 
 def telemetry_check(ser):
     print("\n--- Telemetry ---")
     print_values("Right (local) ", get_values(ser))
     print_values("Left  (CAN 96)", get_values(ser, can_id=LEFT_CAN_ID))
+
 
 def ramp_test(ser):
     """

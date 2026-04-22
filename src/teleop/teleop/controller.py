@@ -1,11 +1,13 @@
 """Interprets messages from the xone driver"""
+
 from evdev import InputDevice, InputEvent, list_devices, ecodes
 import time
 import threading
 from enum import Enum
 
-VENDOR_ID = 0x045e      # microsoft vendor id
-PRODUCT_IDS = [0x0b12, 0x02ea]     # xbox controller product ids
+VENDOR_ID = 0x045E  # microsoft vendor id
+PRODUCT_IDS = [0x0B12, 0x02EA]  # xbox controller product ids
+
 
 class Button(Enum):
     """Enum mapping of ecodes for ease of use in Controller state"""
@@ -73,6 +75,7 @@ class Button(Enum):
 class ControllerState:
     """Threadsafe mapping used to update and grab the internal state of the controller
     Only for use within the xbox interface node."""
+
     def __init__(self, device: InputDevice, node_logger):
         self._lock = threading.RLock()
         self._state = {}
@@ -94,7 +97,9 @@ class ControllerState:
     def update(self, event: InputEvent):
         if event.type not in (ecodes.EV_KEY, ecodes.EV_ABS):
             # we want to avoid a key error here
-            self.logger.warning(f"The event type {event.type.name} does not exist in the Controller State!")
+            self.logger.warning(
+                f"The event type {event.type.name} does not exist in the Controller State!"
+            )
             return
         with self._lock:
             # update the internal button state
@@ -121,17 +126,19 @@ def find_controller() -> InputDevice:
         if device.info.vendor == VENDOR_ID and device.info.product in PRODUCT_IDS:
             print(f"Device {device.name} was discovered!")
             return device
-    
+
     print("No device was found!")
     return None
-        
+
+
 def read_controller(device: InputDevice):
     print(f"Controller ({device.name}) Connected!")
     try:
         for event in device.read_loop():
-            print(event) # raw event
+            print(event)  # raw event
     except OSError as oe:
         print(f"Controller ({device.name}) Disconnected - {oe}")
+
 
 def main():
     try:
@@ -144,6 +151,7 @@ def main():
                 time.sleep(5)
     except KeyboardInterrupt:
         print("Quitting ...")
+
 
 if __name__ == "__main__":
     main()

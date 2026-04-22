@@ -51,7 +51,7 @@ class XboxControllerInterface(Node):
             topic="controller_feedback",
             callback=self.write_controller,
             qos_profile=VOLATILE_QOS,
-            callback=MutuallyExclusiveCallbackGroup()
+            callback_group=MutuallyExclusiveCallbackGroup()
         )
         
         # a place to store the instance of the connected controller

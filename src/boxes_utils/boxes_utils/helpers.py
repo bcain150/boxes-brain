@@ -1,5 +1,6 @@
 import traceback
 
+
 def format_error_message(error: Exception, simplify=True):
     """Simple exception formatting for ros logging"""
 
