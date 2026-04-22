@@ -1,7 +1,7 @@
 # below is for reference only,
 # its a capabilities map outputed by device.capabilities(verbose=True)
 # when a controller is connected
-
+# ruff: noqa
 {
     ("EV_SYN", 0): [
         ("SYN_REPORT", 0),
