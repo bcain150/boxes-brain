@@ -20,8 +20,8 @@ ConverterFunc = Callable[['FieldMask', Optional[int]], int|float]
 ERPM_MIN  =  900
 ERPM_MAX  = 8700
 
-_16_BYTE_FORMAT = '>Bi'
-_32_BYTE_FORMAT = '>BI'
+SET_BYTE_FORMAT = '>Bi'
+GET_BYTE_FORMAT = '>BI'
 
 
 class CommandByte(IntEnum):
@@ -125,9 +125,9 @@ class FieldMask(IntFlag):
         """parse the response from a get status command. Convert each field using converter and potentially scale.
         Finally, apply the converted value to an instance of MotorStatusMsg and return it."""
         # convert to a memory view so they can be consumed
-        # also get a list of FieldMasks which have converters and scaling
+        # also get a list of FieldMasks which have converters and scaling, make sure they are in byte order
         view = memoryview(payload)
-        masks = [cls.from_field(field) for field in fields]
+        masks = sorted([cls.from_field(field) for field in fields], key=lambda m: m.value)
         status_msg = MotorStatusMsg()
         # iterate over each member and pass the raw bytes (view) to the converter
         for member in masks:
@@ -191,12 +191,12 @@ class VescCommandInterface:
     
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.disconnect()
-        return
+        return False
     
     @connection_guard
     def stop_single(self, to_can: bool=False):
         """Stop a single motor. Optionally send this command via CAN forwarding to a separate motor."""
-        payload = struct.pack(_16_BYTE_FORMAT, CommandByte.SET_CURRENT, 0)
+        payload = struct.pack(SET_BYTE_FORMAT, CommandByte.SET_CURRENT, 0)
         if to_can:
             assert self.has_can, "Can forwarding requested but no can id exists!"
             payload = self._with_can_forward(payload=payload)
@@ -205,7 +205,7 @@ class VescCommandInterface:
     @connection_guard
     def stop_all(self):
         """Stop both motors immediately. Includes forwarding over can bus"""
-        payload = struct.pack(_16_BYTE_FORMAT, CommandByte.SET_CURRENT, 0)
+        payload = struct.pack(SET_BYTE_FORMAT, CommandByte.SET_CURRENT, 0)
         if self.has_can:
             can_payload = self._with_can_forward(payload=payload)
             self._build_and_send_packet(payload=can_payload)
@@ -216,7 +216,7 @@ class VescCommandInterface:
     def set_rpm(self, rpm: int, to_can: bool=False):
         """Set the RPM of a motor. Optionally send this command via CAN forwarding to a separate motor."""
         # TODO: figure out if we can set negative rpms
-        payload = struct.pack(_16_BYTE_FORMAT, CommandByte.SET_RPM, rpm)
+        payload = struct.pack(SET_BYTE_FORMAT, CommandByte.SET_RPM, rpm)
         if to_can:
             assert self.has_can, "Can forwarding requested but no can id exists!"
             payload = self._with_can_forward(payload=payload)
@@ -228,7 +228,7 @@ class VescCommandInterface:
         # get the FieldMask from the set of fields and construct the payload for the command
         fields = set(fields)
         field_mask = FieldMask.from_fields(fields)
-        payload = struct.pack(_32_BYTE_FORMAT, CommandByte.GET_VALUES_SELECTIVE, field_mask)
+        payload = struct.pack(GET_BYTE_FORMAT, CommandByte.GET_VALUES_SELECTIVE, field_mask)
         # send with can forwarding if the secondary motor
         if to_can:
             assert self.has_can, "Can forwarding requested but no can id exists!"
