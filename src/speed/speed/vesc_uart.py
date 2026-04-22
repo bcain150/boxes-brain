@@ -53,7 +53,7 @@ class MotorStatusMsg:
     tachometer_abs: Optional[int] = None
     fault_code: Optional[int] = None
 
-##### STATUS RESPONSE CONVERTER FUNCTIONS ####
+##### STATUS RESPONSE CONVERSION ####
 def read_int16(payload: memoryview) -> tuple[int, int]:
     v = struct.unpack_from('>h', payload, 0)[0]
     return v, 2
@@ -65,6 +65,9 @@ def read_int32(payload: memoryview) -> tuple[int, int]:
 def read_unsigned8(payload: memoryview) -> tuple[int, int]:
     v = payload[0]
     return v, 1
+
+class StatusMsgConversionError(Exception):
+    ...
 
 class FieldMask(IntFlag):
     """Representation of possible status fields and their masks. This class also doubles
@@ -97,16 +100,6 @@ class FieldMask(IntFlag):
     TACHOMETER_ABS     = (1 << 14), read_int32
     FAULT_CODE         = (1 << 15), read_unsigned8
 
-    def _convert_raw(self, raw_bytes) -> int | float:
-        """convert raw bytes given a field. Should only be called internally"""
-        try:
-            converted = self.converter(raw_bytes)
-        except Exception as e:
-            raise 
-        if self.scaling:
-            return converted / self.scaling
-        return converted
-
     @classmethod
     def from_field(cls, field_name: str) -> 'FieldMask':
         """Get an instance of a FieldMask give a MotorStatusMsg field name"""
@@ -126,14 +119,32 @@ class FieldMask(IntFlag):
         return result
     
     @classmethod
-    def parse_payload(cls, payload:bytes, fields: Set[str]) -> MotorStatusMsg:
+    def parse_response(cls, payload:bytes, fields: Set[str]) -> MotorStatusMsg:
+        """parse the response from a get status command. Convert each field using converter and potentially scale.
+        Finally, apply the converted value to an instance of MotorStatusMsg and return it."""
+        # convert to a memory view so they can be consumed
+        # also get a list of FieldMasks which have converters and scaling
         view = memoryview(payload)
         masks = [cls.from_field(field) for field in fields]
         status_msg = MotorStatusMsg()
+        # iterate over each member and pass the raw bytes (view) to the converter
         for member in masks:
-            converted, consumed = member._convert_raw(view)
-            view = view[consumed:]
+            try:
+                converted, consumed = member.converter(view)
+            except Exception as e:
+                raise StatusMsgConversionError(f"Conversion for field {member.name.lower()} failed!") from e
+            if member.scaling:  # scale if necessary
+                converted = converted / member.scaling
+            view = view[consumed:]  # update view to consume converted bytes
+
+            # set the field attribute of the MotorStatusMsg
             setattr(status_msg, member.name.lower(), converted)
+        
+        # ensure we converted everything properly
+        if len(view) != 0:
+            raise StatusMsgConversionError(f"Some payload left over after conversion! -> {view.hex()}")
+
+        return status_msg
 
 
 def connection_guard(method):
@@ -144,7 +155,7 @@ def connection_guard(method):
             raise ConnectionError(
                 "No connection to serial connection to VESC!"
             )
-        return method(*args, **kwargs)
+        return method(self, *args, **kwargs)
     return wrapper
 
 class VescCommandInterface:
@@ -174,7 +185,7 @@ class VescCommandInterface:
 
     def __enter__(self):
         self.connect()
-        return
+        return self
     
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.disconnect()
@@ -210,7 +221,7 @@ class VescCommandInterface:
         self._build_and_send_packet(payload=payload)
     
     @connection_guard
-    def get_status(self, to_can: bool=False, *fields) -> MotorStatusMsg:
+    def get_status(self, *fields, to_can: bool=False) -> MotorStatusMsg:
         """Get requested fields from a motor"""
         # get the FieldMask from the set of fields and construct the payload for the command
         fields = set(fields)
@@ -224,7 +235,7 @@ class VescCommandInterface:
         self._build_and_send_packet(payload=payload)
         response_bytes = self._get_response_payload(from_command=CommandByte.GET_VALUES_SELECTIVE)
         # parse the payload and get the MotorStatusMsg
-        return FieldMask.parse_payload(response_bytes)
+        return FieldMask.parse_response(response_bytes, fields)
 
     # TODO: implement the above, also think about keep alive packet sending. Connection guard doesn't help
     # against vesc side connection, only os/process side. Think about if get status acts as keep alive,
