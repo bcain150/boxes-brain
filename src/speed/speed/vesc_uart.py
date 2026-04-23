@@ -132,14 +132,14 @@ class FieldMask(IntFlag):
         return result
 
     @classmethod
-    def parse_response(cls, payload: bytes, fields: Set[str]) -> MotorStatusMsg:
+    def parse_response(cls, payload: bytes, motor_fields: Set[str]) -> MotorStatusMsg:
         """parse the response from a get status command. Convert each field using converter and potentially scale.
         Finally, apply the converted value to an instance of MotorStatusMsg and return it."""
         # convert to a memory view so they can be consumed
         # also get a list of FieldMasks which have converters and scaling, make sure they are in byte order
         view = memoryview(payload)
         masks = sorted(
-            [cls.from_field(field) for field in fields], key=lambda m: m.value
+            [cls.from_field(field) for field in motor_fields], key=lambda m: m.value
         )
         status_msg = MotorStatusMsg()
         # iterate over each member and pass the raw bytes (view) to the converter
@@ -244,14 +244,14 @@ class VescCommandInterface:
         self._build_and_send_packet(payload=payload)
 
     @connection_guard
-    def get_status(self, *fields, to_can: bool = False) -> MotorStatusMsg:
+    def get_status(self, *motor_fields, to_can: bool = False) -> MotorStatusMsg:
         """Get requested fields from a motor. If fields is empty all fields are returned."""
         # get the FieldMask from the set of fields and construct the payload for the command
-        if len(fields) == 0:
+        if len(motor_fields) == 0:
             # if fields is empty get all of them
-            fields = [field.name for field in fields(MotorStatusMsg)]
-        fields = set(fields)
-        field_mask = FieldMask.from_fields(fields)
+            motor_fields = [field.name for field in fields(MotorStatusMsg)]
+        motor_fields = set(motor_fields)
+        field_mask = FieldMask.from_fields(motor_fields)
         payload = struct.pack(
             GET_BYTE_FORMAT, CommandByte.GET_VALUES_SELECTIVE, field_mask
         )
@@ -265,7 +265,7 @@ class VescCommandInterface:
             from_command=CommandByte.GET_VALUES_SELECTIVE
         )
         # parse the payload and get the MotorStatusMsg
-        return FieldMask.parse_response(response_bytes, fields)
+        return FieldMask.parse_response(response_bytes, motor_fields)
 
     # TODO: think about keep alive packet sending. Connection guard doesn't help
     # against vesc side connection, only os/process side.
@@ -355,6 +355,7 @@ if __name__ == "__main__":
     import sys
     sys.path.insert(0, '/home/bcain/boxes-brain/src/boxes_utils/')
     from boxes_utils.helpers import format_error_message
+    import time
     UART_PORT = "/dev/ttyAMA0"
     BAUD_RATE = 115200
     LEFT_CAN_ID = 96
@@ -371,6 +372,7 @@ if __name__ == "__main__":
                 print(f"{right_motor_status}")
                 print("---LEFT MOTOR STATUS---")
                 print(f"{left_motor_status}")
+                time.sleep(0.25)
             except KeyboardInterrupt:
                 print("Keyboard interrupt detected! - shutting down test script")
                 break
