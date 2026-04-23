@@ -29,12 +29,44 @@ class CommandByte(IntEnum):
     # https://github.com/vedderb/bldc/blob/a16ffc6d9cf469884703a84ba2ee87482b71fc4c/datatypes.h#L944
 
     SET_RPM = 0x08
+    SET_DUTY = 0x05
     SET_CURRENT = 0x06  # used only for stop (0A)
     GET_VALUES = 0x04  # unused currently
     GET_VALUES_SELECTIVE = 0x32
     FORWARD_CAN = 0x22
     # TODO: figure out if we can set negative rpms
 
+class FaultCode(IntEnum):
+    """VESC fault codes from vedderb/bldc datatypes.h"""
+    UNKNOWN = -1
+    OK = 0
+    OVER_VOLTAGE = 1
+    UNDER_VOLTAGE = 2
+    DRV = 3
+    ABS_OVER_CURRENT = 4
+    OVER_TEMP_FET = 5
+    OVER_TEMP_MOTOR = 6
+    GATE_DRIVER_OVER_VOLTAGE = 7
+    GATE_DRIVER_UNDER_VOLTAGE = 8
+    MCU_UNDER_VOLTAGE = 9
+    BOOTING_FROM_WATCHDOG_RESET = 10
+    ENCODER_SPI = 11
+    ENCODER_SINCOS_BELOW_MIN_AMPLITUDE = 12
+    ENCODER_SINCOS_ABOVE_MAX_AMPLITUDE = 13
+    FLASH_CORRUPTION = 14
+    HIGH_OFFSET_CURRENT_SENSOR_1 = 15
+    HIGH_OFFSET_CURRENT_SENSOR_2 = 16
+    HIGH_OFFSET_CURRENT_SENSOR_3 = 17
+    UNBALANCED_CURRENTS = 18
+    BRK = 19
+    RESOLVER_LOT = 20
+    RESOLVER_DOS = 21
+    RESOLVER_LOS = 22
+    FLASH_CORRUPTION_APP_CFG = 23
+    FLASH_CORRUPTION_MC_CFG = 24
+    ENCODER_NO_MAGNET = 25
+    ENCODER_MAGNET_TOO_STRONG = 26
+    PHASE_FILTER = 27
 
 @dataclass
 class MotorStatusMsg:
@@ -55,11 +87,27 @@ class MotorStatusMsg:
     watt_hours_charged: Optional[float] = None
     tachometer: Optional[int] = None
     tachometer_abs: Optional[int] = None
-    fault_code: Optional[int] = None
+    fault_code: Optional[FaultCode] = None
 
     def __str__(self):
-        lines = [f"  {f.name}: {getattr(self, f.name)}" for f in fields(self)]
+        lines = []
+        for f in fields(self):
+            value = getattr(self, f.name)
+            if f.name == "fault_code" and value is not None:
+                lines.append(f"   {f.name}: {FaultCode(value).name}")
+            if value is not None:
+                lines.append(f"   {f.name}: {value}")
         return "MotorStatusMsg:\n" + "\n".join(lines)
+    
+    def __setattr__(self, name, value):
+        if name == "fault_code":
+            try:
+                value = FaultCode(value)
+            except ValueError:
+                # in case we get a bad value
+                value = FaultCode.UNKNOWN
+        super().__setattr__(name, value)
+
 
 ##### STATUS RESPONSE CONVERSION ####
 def read_int16(payload: memoryview) -> tuple[int, int]:
@@ -243,6 +291,15 @@ class VescCommandInterface:
             payload = self._with_can_forward(payload=payload)
         self._build_and_send_packet(payload=payload)
 
+    def set_duty(self, duty: float, to_can: bool=False):
+        """Set the duty cycle of the motor as a percent 0-1. Optionally send this command via CAN forwarding to a separate motor"""
+        duty_rep = int(duty*100_000)
+        payload = struct.pack(SET_BYTE_FORMAT, CommandByte.SET_DUTY, duty_rep)
+        if to_can:
+            assert self.has_can, "Can forwarding requested but no can id exists!"
+            payload = self._with_can_forward(payload=payload)
+        self._build_and_send_packet(payload=payload)
+
     @connection_guard
     def get_status(self, *motor_fields, to_can: bool = False) -> MotorStatusMsg:
         """Get requested fields from a motor. If fields is empty all fields are returned."""
@@ -348,7 +405,7 @@ class VescCommandInterface:
         assert payload[0] == from_command, (
             f"Payload is not from command {from_command.name}! Rather {CommandByte(payload[0])}"
         )
-        return payload[1:]  # we only want to return the values, not the command name
+        return payload[5:]  # we only want to return the values, not the command byte or the mask byte
 
 
 if __name__ == "__main__":
@@ -364,10 +421,16 @@ if __name__ == "__main__":
         uart_port=UART_PORT,
         baud_rate=BAUD_RATE,
         secondary_can_id=LEFT_CAN_ID) as vesc:
+        motor_fields = ["temp_motor", "temp_fet", "rpm", "fault_code", "duty_now"]
+        start_time = time.monotonic()
         while True:
             try:
-                right_motor_status = vesc.get_status()
-                left_motor_status = vesc.get_status(to_can=True)
+                right_motor_status = vesc.get_status(*motor_fields)
+                left_motor_status = vesc.get_status(*motor_fields, to_can=True)
+                # vesc.set_duty(duty=-0.05)
+                # vesc.set_duty(duty=0.05, to_can=True)
+                vesc.set_rpm(400)
+                vesc.set_rpm(400, to_can=True)
                 print("---RIGHT MOTOR STATUS---")
                 print(f"{right_motor_status}")
                 print("---LEFT MOTOR STATUS---")
