@@ -9,9 +9,8 @@ import time
 from typing import Optional, Callable, Set
 from enum import IntEnum, IntFlag
 from pathlib import Path
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 
-UARTDevice = Path | str
 ConverterFunc = Callable[["FieldMask", Optional[int]], int | float]
 
 # min and max erpms as measured from VESC tool testing
@@ -58,6 +57,9 @@ class MotorStatusMsg:
     tachometer_abs: Optional[int] = None
     fault_code: Optional[int] = None
 
+    def __str__(self):
+        lines = [f"  {f.name}: {getattr(self, f.name)}" for f in fields(self)]
+        return "MotorStatusMsg:\n" + "\n".join(lines)
 
 ##### STATUS RESPONSE CONVERSION ####
 def read_int16(payload: memoryview) -> tuple[int, int]:
@@ -168,7 +170,7 @@ def connection_guard(method):
     """decorator for ensuring we're connected to the serial device"""
 
     @functools.wraps(method)
-    def wrapper(self: VescCommandInterface, *args, **kwargs):
+    def wrapper(self, *args, **kwargs):
         if self._serial is None or not self._serial.is_open:
             raise ConnectionError("No connection to serial connection to VESC!")
         return method(self, *args, **kwargs)
@@ -179,19 +181,19 @@ def connection_guard(method):
 class VescCommandInterface:
     def __init__(
         self,
-        uart_port: UARTDevice,
+        uart_port: str,
         baud_rate: int,
         secondary_can_id: Optional[int] = None,
     ):
-        self.uart_port = Path(uart_port)
+        self.uart_port = uart_port
         self.baud_rate = baud_rate
         self.secondary_can_id = secondary_can_id
         self.has_can = secondary_can_id is not None
 
         self._serial: Optional[serial.Serial] = None
 
-        assert self.uart_port.exists(), f"UART port {self.uart_port} does not exist!"
-        assert self.uart_port.is_char_device(), (
+        assert Path(self.uart_port).exists(), f"UART port {self.uart_port} does not exist!"
+        assert Path(self.uart_port).is_char_device(), (
             f"UART port {self.uart_port} is not a char device!"
         )
 
@@ -243,8 +245,11 @@ class VescCommandInterface:
 
     @connection_guard
     def get_status(self, *fields, to_can: bool = False) -> MotorStatusMsg:
-        """Get requested fields from a motor"""
+        """Get requested fields from a motor. If fields is empty all fields are returned."""
         # get the FieldMask from the set of fields and construct the payload for the command
+        if len(fields) == 0:
+            # if fields is empty get all of them
+            fields = [field.name for field in fields(MotorStatusMsg)]
         fields = set(fields)
         field_mask = FieldMask.from_fields(fields)
         payload = struct.pack(
@@ -262,8 +267,9 @@ class VescCommandInterface:
         # parse the payload and get the MotorStatusMsg
         return FieldMask.parse_response(response_bytes, fields)
 
-    # TODO: implement the above, also think about keep alive packet sending. Connection guard doesn't help
-    # against vesc side connection, only os/process side. Think about if get status acts as keep alive,
+    # TODO: think about keep alive packet sending. Connection guard doesn't help
+    # against vesc side connection, only os/process side.
+    # Think about if get status acts as keep alive,
     # claude says it doesn't count but something worth checking
 
     # ── Packet helpers ─────────────────────────────────────────────────────────────
@@ -343,3 +349,30 @@ class VescCommandInterface:
             f"Payload is not from command {from_command.name}! Rather {CommandByte(payload[0])}"
         )
         return payload[1:]  # we only want to return the values, not the command name
+
+
+if __name__ == "__main__":
+    import sys
+    sys.path.insert(0, '/home/bcain/boxes-brain/src/boxes_utils/')
+    from boxes_utils.helpers import format_error_message
+    UART_PORT = "/dev/ttyAMA0"
+    BAUD_RATE = 115200
+    LEFT_CAN_ID = 96
+
+    with VescCommandInterface(
+        uart_port=UART_PORT,
+        baud_rate=BAUD_RATE,
+        secondary_can_id=LEFT_CAN_ID) as vesc:
+        while True:
+            try:
+                right_motor_status = vesc.get_status()
+                left_motor_status = vesc.get_status(to_can=True)
+                print("---RIGHT MOTOR STATUS---")
+                print(f"{right_motor_status}")
+                print("---LEFT MOTOR STATUS---")
+                print(f"{left_motor_status}")
+            except KeyboardInterrupt:
+                print("Keyboard interrupt detected! - shutting down test script")
+                break
+            except Exception as e:
+                print(f"An exception occured while getting status -> \n{format_error_message(e)}")
