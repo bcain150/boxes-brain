@@ -4,7 +4,7 @@ from evdev import InputDevice, InputEvent, list_devices, ecodes
 import time
 import threading
 from enum import Enum
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional
 from dataclasses import dataclass
 
 VENDOR_ID = 0x045E  # microsoft vendor id
@@ -22,6 +22,7 @@ class Button(Enum):
         obj._value_ = (event_type, code)
         obj.event_type = event_type
         obj.code = code
+        return obj
 
     # sticks
     LEFT_STICK_Y = ecodes.EV_ABS, ecodes.ABS_Y
@@ -71,6 +72,7 @@ class Button(Enum):
             cls.XBOX,
         }
 
+    @classmethod
     def get_abs(cls):
         """Get a Set of ABS based control Buttons"""
         return {
@@ -117,8 +119,8 @@ class ButtonState:
     raw_value: int | bool
     stamp: float
     meta_info: Optional[AxisMeta] = None
-    _last: int = None       # used to calculate flat and fuzz
-    _value: int = None      # use this to check how flat and fuzz are computed
+    _last: Optional[int] = None       # used to calculate flat and fuzz
+    _value: Optional[int] = None      # use this to check how flat and fuzz are computed
 
     @property
     def is_axis(self):
@@ -130,8 +132,8 @@ class ButtonState:
         if not self.is_axis:
             return self.raw_value
         if self.meta_info.min >= 0 :
-            return self.normalize_unsigned()
-        return self.normalize_signed()
+            return self._normalize_unsigned()
+        return self._normalize_signed()
     
     def update(self, value: int|bool, stamp: float):
         self.raw_value = value
@@ -151,12 +153,13 @@ class ButtonState:
         """applies deadzone normalization if difference from center is less than fuzz"""
         if abs(self.raw_value - self.meta_info.center) <= self.meta_info.flat:
             self._value = self.meta_info.center
-        self._value = self.raw_value
+        else:
+            self._value = self.raw_value
 
     def _normalize_signed(self) -> float:
         """Normalize a signed value from it's original range to -1.0 to 1.0"""
-        self._apply_flat()
         self._apply_fuzz()
+        self._apply_flat()
         n = (self._value - self.meta_info.center) / self.meta_info.half_range
         return max(-1.0, min(1.0, n))    # incase there is some noise
     
