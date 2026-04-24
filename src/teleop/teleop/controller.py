@@ -12,6 +12,8 @@ from boxes_utils import format_error_message
 VENDOR_ID = 0x045E  # microsoft vendor id
 PRODUCT_IDS = [0x0B12, 0x02EA]  # xbox controller product ids
 
+# override value for flat abs_info, kernel doesn't provide good enough values
+STICK_DEADZONE = 2000
 
 class Button(Enum):
     """Enum mapping of ecodes for ease of use in Controller state"""
@@ -85,6 +87,15 @@ class Button(Enum):
             cls.LEFT_RIGHT,
             cls.UP_DOWN,
         }
+
+    @classmethod
+    def stick_inputs(cls):
+        return {
+            cls.LEFT_STICK_Y,
+            cls.LEFT_STICK_X,
+            cls.RIGHT_STICK_Y,
+            cls.RIGHT_STICK_X,
+        }
     
 
 @dataclass
@@ -120,9 +131,15 @@ class AxisMeta:
 class ButtonState:
     raw_value: int | bool
     stamp: float
+    from_button: Button
     meta_info: Optional[AxisMeta] = None
     _last: Optional[int] = None       # used to calculate flat and fuzz
     _value: Optional[int] = None      # use this to check how flat and fuzz are computed
+
+    def __post_init__(self):
+        if self.from_button in Button.stick_inputs():
+            # override flat:
+            self.meta_info.flat = STICK_DEADZONE
 
     @property
     def is_axis(self):
@@ -162,7 +179,6 @@ class ButtonState:
         """Normalize a signed value from it's original range to -1.0 to 1.0"""
         self._apply_fuzz()
         self._apply_flat()
-        self._value = self.raw_value
         n = (self._value - self.meta_info.center) / self.meta_info.half_range
         return max(-1.0, min(1.0, n))    # incase there is some noise
     
@@ -194,9 +210,11 @@ class ControllerState:
             # it's a boolean value
             for i, code in enumerate(caps[ecodes.EV_KEY]):
                 try:
-                    self._state[Button(ecodes.EV_KEY, code)] = ButtonState(
+                    button = Button(ecodes.EV_KEY, code)
+                    self._state[button] = ButtonState(
                         raw_value=False,
-                        stamp=now
+                        stamp=now,
+                        from_button=button
                     )
                 except ValueError:
                     names = verbose_caps[('EV_KEY', ecodes.EV_KEY)][i][0]
@@ -206,10 +224,12 @@ class ControllerState:
             # initialize with value from abs
             for i, (code, absinfo) in enumerate(caps[ecodes.EV_ABS]):
                 try:
-                    self._state[Button(ecodes.EV_ABS, code)] = ButtonState(
+                    button = Button(ecodes.EV_ABS, code)
+                    self._state[button] = ButtonState(
                         raw_value=absinfo.value,
                         stamp=now,
-                        meta_info=AxisMeta.from_abs_info(abs_info=absinfo)
+                        meta_info=AxisMeta.from_abs_info(abs_info=absinfo),
+                        from_button=button
                     )
                 except ValueError:
                     names = verbose_caps[('EV_ABS', ecodes.EV_ABS)][i][0]

@@ -284,7 +284,7 @@ class VescCommandInterface:
     @connection_guard
     def set_rpm(self, rpm: int, to_can: bool = False):
         """Set the RPM of a motor. Optionally send this command via CAN forwarding to a separate motor."""
-        # TODO: figure out if we can set negative rpms
+        assert ERPM_MIN <= rpm <= ERPM_MAX, f"RPM request invalid ({rpm})!must be between {ERPM_MIN} and {ERPM_MAX} inclusive!"
         payload = struct.pack(SET_BYTE_FORMAT, CommandByte.SET_RPM, rpm)
         if to_can:
             assert self.has_can, "Can forwarding requested but no can id exists!"
@@ -293,6 +293,7 @@ class VescCommandInterface:
 
     def set_duty(self, duty: float, to_can: bool=False):
         """Set the duty cycle of the motor as a percent 0-1. Optionally send this command via CAN forwarding to a separate motor"""
+        assert -1 <= duty <= 1, f"Duty cycle request invalid ({duty:.4})! Must be between -1 and 1 inclusive!"
         duty_rep = int(duty*100_000)
         payload = struct.pack(SET_BYTE_FORMAT, CommandByte.SET_DUTY, duty_rep)
         if to_can:

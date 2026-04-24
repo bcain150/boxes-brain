@@ -114,15 +114,17 @@ class XboxControllerInterface(Node):
         if not self.first_read_success:
             return
         try:
-            input_state = XboxInput(
-                connected=self.connected,
-                left_stick_y=self.controller_state.get_normalized(Button.LEFT_STICK_Y),
-                right_stick_y=self.controller_state.get_normalized(Button.RIGHT_STICK_Y)
-            )
-            self.get_logger().debug("Publishing Controller Input State...")
+            left_stick_y=self.controller_state.get_normalized(Button.LEFT_STICK_Y)
+            right_stick_y=self.controller_state.get_normalized(Button.RIGHT_STICK_Y)
         except Exception as e:
             self.get_logger().error(f"Error Publishing Controller State! ->\n {format_error_message(e)}")
 
+        input_state = XboxInput(
+            connected=self.connected,
+            left_stick_y=left_stick_y,
+            right_stick_y=right_stick_y,
+        )
+        self.get_logger().debug(f"Publishing Controller Input State...\n{input_state}")
         self.teleop_publisher.publish(input_state)
 
 
