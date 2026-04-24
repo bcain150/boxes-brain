@@ -10,10 +10,10 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy import logging as ros_logger
 
-from boxes_interfaces.msg import XboxVelocityInput, XboxOutput, XboxButtonInput
+from boxes_interfaces.msg import XboxOutput, XboxInput
 from boxes_utils import VOLATILE_QOS, format_error_message
 
-from teleop.controller import ControllerState, VENDOR_ID, PRODUCT_IDS
+from teleop.controller import ControllerState, Button, VENDOR_ID, PRODUCT_IDS
 
 INPUT_PUBLISHING_RATE_S = 0.02
 
@@ -22,19 +22,17 @@ class XboxControllerInterface(Node):
     def __init__(self):
         super().__init__("xbox_control_interface")
 
+        # controller read timer is a loop inside a loop so just immediately restart it
         self.controller_read_timer = self.create_timer(0, self.read_controller)
         self.teleop_publishing_timer = self.create_timer(
             INPUT_PUBLISHING_RATE_S, self.send_teleop
         )
 
-        self.teleop_move_publisher = self.create_publisher(
-            msg_type=XboxVelocityInput,
+        self.teleop_publisher = self.create_publisher(
+            msg_type=XboxInput,
             topic="controller_move_state",
             qos_profile=VOLATILE_QOS,
             callback_group=MutuallyExclusiveCallbackGroup(),
-        )
-        self.teleop_button_publisher = self.create_publisher(
-            msg_type=XboxButtonInput, topic="controller_button_state"
         )
 
         # allows other nodes to provide feedback
@@ -49,6 +47,7 @@ class XboxControllerInterface(Node):
         # a place to store the instance of the connected controller
         self.controller: Optional[InputDevice] = None
         self.controller_state: Optional[ControllerState] = None
+        self.connected = False
 
     def _connect_to_controller(self):
         while self.controller is None:
@@ -73,9 +72,9 @@ class XboxControllerInterface(Node):
         it moves to a disconnected state and will constantly attempt to reconnect"""
 
         if not self.controller:
-            # TODO: publish a state message that we are in the disconnected state
             # spin inside this loop until a controller is disconnected
             self._connect_to_controller()
+            self.connected = True
 
         try:
             for event in self.controller.read_loop():
@@ -91,14 +90,20 @@ class XboxControllerInterface(Node):
             self.get_logger().error(
                 f"An unhandled exception occured in the controller read loop! ->\n{format_error_message(e)}"
             )
+        finally:
+            # mark as disconnected for state publishing
+            self.connected = False
 
-    def write_controller(self):
+    def write_controller(self, data):
         pass
 
     def send_teleop(self):
-        # TODO read from state and publish to both topics depending on the topic.
-        # Consider a single topic for simplicities sake
-        pass
+        # TODO make this account for stale packets
+        input_state = XboxInput(
+            connected=self.connected,
+            left_stick_y=self.controller_state.get_button(Button.LEFT_STICK_Y),
+            right_stick_y=self.controller_state.get_botton(Button.RIGHT_STICK_Y)
+        )
 
 
 def main(args=None):
