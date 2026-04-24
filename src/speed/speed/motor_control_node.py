@@ -1,7 +1,7 @@
 from threading import RLock
 
 import rclpy
-from rclpy import Node
+from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
 from rclpy import logging as ros_logger
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
