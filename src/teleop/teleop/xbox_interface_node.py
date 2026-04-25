@@ -1,4 +1,6 @@
 #! /usr/bin/python3
+import os
+import signal
 import time
 from typing import Optional
 
@@ -44,7 +46,7 @@ class XboxControllerInterface(Node):
             topic="controller_move_state",
             qos_profile=VOLATILE_QOS
         )
-        
+
         # request to modify the speed or the trim of the motors
         self.speed_trim = self.create_client(
             srv_type=SpeedTrim,
@@ -64,7 +66,7 @@ class XboxControllerInterface(Node):
         self.controller: Optional[InputDevice] = None
         self.controller_state: Optional[ControllerState] = None
         self.first_read_success = False
-        
+
         # saves previous state of dpad to implement deduplication for long presses
         self._last_up_down_value = 0
         self._last_right_left_value = 0
@@ -74,7 +76,7 @@ class XboxControllerInterface(Node):
         return self.controller is not None
 
     def _connect_to_controller(self):
-        while self.controller is None:
+        while self.controller is None and not self.controller_read_timer.is_canceled() and rclpy.ok():
             for path in list_devices():
                 device = InputDevice(path)
                 if (
@@ -91,17 +93,26 @@ class XboxControllerInterface(Node):
                 break
             self.get_logger().warning("No device found!")
             time.sleep(1)
+        if self.controller_read_timer.is_canceled() or not rclpy.ok():
+            self.get_logger().error("Shutting down due to controller read cancel...")
+            return False
         self.get_logger().info("Controller Connected!")
+        return True
 
     def read_controller(self):
         """ROS timer loop which constantly reads events coming from the controller. If the controller disconnects,
         it moves to a disconnected state and will constantly attempt to reconnect"""
 
         if not self.connected:
-            # spin inside this loop until a controller is disconnected
-            self._connect_to_controller()
+            # spin inside this loop until a controller is connected or rclpy shuts down
+            if not self._connect_to_controller():
+                return # quit early if False (controller_read_timer cancelled)
+
 
         try:
+            if not rclpy.ok():
+                self.controller.close()
+                self.controller = None
             for event in self.controller.read_loop():
                 if event.type == ecodes.EV_SYN:
                     self.get_logger().debug("SYN RECEIVED")
@@ -184,6 +195,16 @@ def main(args=None):
     rclpy.init(args=args)
     xbox_node = XboxControllerInterface()
 
+    def handle_sigint(signum, frame):
+        if xbox_node.controller is not None:
+            try:
+                xbox_node.controller.close()
+            except Exception:
+                pass
+        raise KeyboardInterrupt
+
+    signal.signal(signal.SIGINT, handle_sigint)
+
     # TODO: think about how many threads
     executor = MultiThreadedExecutor(num_threads=3)
     executor.add_node(xbox_node)
@@ -196,9 +217,10 @@ def main(args=None):
             "Keyboard Interrupt - Shutting down Xbox Control Interface!"
         )
     finally:
+        executor.shutdown(timeout_sec=2.0)   # stops spinning, joins internal threads
         xbox_node.destroy_node()
-        executor.shutdown()   # stops spinning, joins internal threads
         rclpy.try_shutdown()
+        os._exit(0)
 
 
 if __name__ == "__main__":
