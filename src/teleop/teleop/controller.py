@@ -177,6 +177,11 @@ class ButtonState:
 
     def _normalize_signed(self) -> float:
         """Normalize a signed value from it's original range to -1.0 to 1.0"""
+        if self.from_button == Button.UP_DOWN:
+            return float(self.raw_value*-1) # flip this because it's reversed some reason
+        elif self.from_button == Button.LEFT_RIGHT:
+            return float(self.raw_value)
+        
         self._apply_fuzz()
         self._apply_flat()
         n = (self._value - self.meta_info.center) / self.meta_info.half_range

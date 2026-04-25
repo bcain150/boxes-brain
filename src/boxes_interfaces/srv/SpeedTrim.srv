@@ -1,0 +1,10 @@
+# SpeedTrim Request - modify the max speed or left-right trim of the robot
+
+# Request
+int32 speed_increment 0
+int32 left_trim_increment 0
+int32 right_trim_increment 0
+---
+# Response`
+string update_string
+bool success

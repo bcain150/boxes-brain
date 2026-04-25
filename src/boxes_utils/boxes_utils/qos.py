@@ -6,3 +6,9 @@ VOLATILE_QOS = QoSProfile(
     history=HistoryPolicy.KEEP_LAST,
     depth=10,
 )
+
+RELIABLE_QOS = QoSProfile(
+    depth=10,
+    reliability=ReliabilityPolicy.RELIABLE,
+    durability=DurabilityPolicy.TRANSIENT_LOCAL
+)

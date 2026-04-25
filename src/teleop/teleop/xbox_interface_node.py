@@ -10,8 +10,9 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup, ReentrantCallbackGroup
 from rclpy import logging as ros_logger
 
-from boxes_interfaces.msg import XboxOutput, XboxInput
-from boxes_utils import VOLATILE_QOS, format_error_message
+from boxes_interfaces.msg import XboxInput
+from boxes_interfaces.srv import SpeedTrim
+from boxes_utils import VOLATILE_QOS, RELIABLE_QOS, format_error_message
 
 from teleop.controller import ControllerState, Button, VENDOR_ID, PRODUCT_IDS
 
@@ -24,6 +25,7 @@ class XboxControllerInterface(Node):
 
         state_read_group = MutuallyExclusiveCallbackGroup()
         input_output_group = MutuallyExclusiveCallbackGroup()
+        trim_group = ReentrantCallbackGroup()
 
         # controller read timer is a loop inside a loop so just immediately restart it
         self.controller_read_timer = self.create_timer(
@@ -42,20 +44,30 @@ class XboxControllerInterface(Node):
             topic="controller_move_state",
             qos_profile=VOLATILE_QOS
         )
-
-        # allows other nodes to provide feedback
-        self.controller_feedback = self.create_subscription(
-            msg_type=XboxOutput,
-            topic="controller_feedback",
-            callback=self.write_controller,
-            qos_profile=VOLATILE_QOS,
-            callback_group=input_output_group,
+        
+        # request to modify the speed or the trim of the motors
+        self.speed_trim = self.create_client(
+            srv_type=SpeedTrim,
+            srv_name="trim_speed",
+            qos_profile=RELIABLE_QOS,
+            callback_group=trim_group
         )
+
+        self.get_logger().info("waiting for service")
+
+        while not self.speed_trim.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info("Speed Trim service unavailable, waiting again...")
+
+        self.get_logger().info("waiting for service complete")
 
         # a place to store the instance of the connected controller
         self.controller: Optional[InputDevice] = None
         self.controller_state: Optional[ControllerState] = None
         self.first_read_success = False
+        
+        # saves previous state of dpad to implement deduplication for long presses
+        self._last_up_down_value = 0
+        self._last_right_left_value = 0
 
     @property
     def connected(self):
@@ -116,9 +128,36 @@ class XboxControllerInterface(Node):
         try:
             left_stick_y=self.controller_state.get_normalized(Button.LEFT_STICK_Y)
             right_stick_y=self.controller_state.get_normalized(Button.RIGHT_STICK_Y)
-        except Exception as e:
-            self.get_logger().error(f"Error Publishing Controller State! ->\n {format_error_message(e)}")
 
+            # should be an int
+            dpad_up_down = int(self.controller_state.get_normalized(Button.UP_DOWN))
+            dpad_left_right = int(self.controller_state.get_normalized(Button.LEFT_RIGHT))
+        except Exception as e:
+            self.get_logger().error(f"Error getting normalized controller state! ->\n {format_error_message(e)}")
+            return
+
+        # implement deduplication of dpad buttons (don't count long presses)
+        if self._last_right_left_value != dpad_left_right and dpad_left_right:
+            self.get_logger().info(f"Sending request to modify motor trims -> {dpad_left_right}")
+            left_trim = dpad_left_right if dpad_left_right < 0 else 0
+            right_trim = dpad_left_right if dpad_left_right > 0 else 0
+            req = SpeedTrim.Request(
+                left_trim_increment = left_trim,
+                right_trim_increment = right_trim,
+            )
+            future = self.speed_trim.call_async(req)
+            future.add_done_callback(self.handle_speed_trim_future)
+
+        if self._last_up_down_value != dpad_up_down and dpad_up_down:
+            self.get_logger().info(f"Sending request to modify speed: value -> {dpad_up_down}")
+            req = SpeedTrim.Request(
+                speed_increment = dpad_up_down
+            )
+            future = self.speed_trim.call_async(req)
+            future.add_done_callback(self.handle_speed_trim_future)
+
+        self._last_up_down_value = dpad_up_down
+        self._last_right_left_value = dpad_left_right
         input_state = XboxInput(
             connected=self.connected,
             left_stick_y=left_stick_y,
@@ -126,6 +165,17 @@ class XboxControllerInterface(Node):
         )
         self.get_logger().debug(f"Publishing Controller Input State...\n{input_state}")
         self.teleop_publisher.publish(input_state)
+
+    def handle_speed_trim_future(self, future):
+        try:
+            response = future.result()
+        except Exception as e:
+            self.get_logger().error(f"Error getting speed trim response! ->\n{format_error_message(e)}")
+            return
+        if response.success:
+            self.get_logger().info(f"Succesfully Completed Speed-Trim Request: {response.update_string}")
+        else:
+            self.get_logger().error(f"Error completing Speed-Trim Request!: {response.update_string}")
 
 
 
@@ -135,7 +185,7 @@ def main(args=None):
     xbox_node = XboxControllerInterface()
 
     # TODO: think about how many threads
-    executor = MultiThreadedExecutor(num_threads=2)
+    executor = MultiThreadedExecutor(num_threads=3)
     executor.add_node(xbox_node)
     xbox_node.get_logger().info("Xbox Control Interface Initialized.")
 

@@ -15,12 +15,11 @@ find_package(std_msgs REQUIRED)
 
 set(msg_files
   "msg/XboxInput.msg"
-  "msg/XboxOutput.msg"
 )
 
-# set(srv_files
-#   "srv/mysrv"
-# )
+set(srv_files
+  "srv/SpeedTrim.srv"
+)
 
 # set(action_files
 #   "action/myaction"
@@ -28,7 +27,7 @@ set(msg_files
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   ${msg_files}
-  # ${srv_files}
+  ${srv_files}
   # ${action_files}
   DEPENDENCIES std_msgs
 )
