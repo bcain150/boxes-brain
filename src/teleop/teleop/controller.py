@@ -7,7 +7,7 @@ from enum import Enum
 from typing import Dict, Optional
 from dataclasses import dataclass
 
-from boxes_utils import format_error_message
+from boxes_utils import format_error_message, locked
 
 VENDOR_ID = 0x045E  # microsoft vendor id
 PRODUCT_IDS = [0x0B12, 0x02EA]  # xbox controller product ids
@@ -241,7 +241,7 @@ class ControllerState:
                     self.logger.warning(f"Skipping unmapped EV_ABS - {names}")
 
     def update(self, event: InputEvent):
-        with self._lock:
+        with locked(self._lock):
             # update the internal button state
             try:
                 button = Button(event.type, event.code)
@@ -254,20 +254,20 @@ class ControllerState:
             self.logger.info(f"Button Event for {button.name}: {norm}")
 
     def _get(self, button: Button):
-        with self._lock:
+        with locked(self._lock):
             return self._state[button]
 
     def get_raw(self, button: Button) -> bool | int:
-        with self._lock:
+        with locked(self._lock):
             return self._state[button].raw_value
     
     def get_normalized(self, button: Button) -> bool | float:
-        with self._lock:
+        with locked(self._lock):
             return self._state[button].normalized
 
     def snapshot(self):
         """Get a full snapshot of the current state"""
-        with self._lock:
+        with locked(self._lock):
             return dict(self._state)
         
 

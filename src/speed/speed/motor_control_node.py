@@ -90,7 +90,7 @@ class MotorControlInterface(Node):
 
     def read_motors(self):
         motor_fields = ["temp_motor", "temp_fet", "rpm", "fault_code", "duty_now"]
-        with self._serial_lock:
+        with locked(self._serial_lock):
             try:
                 self.get_logger().info("Getting left and right motor status...")
                 right_motor = self.vesc.get_status(*motor_fields, to_can=True)
@@ -120,7 +120,7 @@ class MotorControlInterface(Node):
         is_connected = data.connected
         errored = False
 
-        with self._serial_lock:
+        with locked(self._serial_lock):
             if is_connected:
                 try:
                     self.vesc.set_duty(right_motor_duty*self.right_scaling, to_can=True)
@@ -205,8 +205,8 @@ def main(args=None):
             "Keyboard Interrupt - Shutting down Motor Control"
         )
     finally:
-        motor_control.destroy_node()
         executor.shutdown()   # stops spinning, joins internal threads
+        motor_control.destroy_node()
         rclpy.try_shutdown()
 
 
