@@ -1,0 +1,29 @@
+[Unit]
+Description=Boxes Brain ROS 2 Stack
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=bcain
+Group=bcain
+# need dialout for vesc control and input for xbox reading
+SupplementaryGroups=dialout input
+
+Environment="HOME=/home/bcain"
+
+ExecStart=/usr/local/bin/boxes-brain-launch.sh
+
+# make sure logs go to a namespace, see journald@boxes.conf to configure how often
+# they get deleted
+LogNamespace=boxes
+
+Restart=on-failure
+RestartSec=3
+
+TimeoutStopSec=20
+KillMode=mixed
+KillSignal=SIGINT
+
+[Install]
+WantedBy=multi-user.target

@@ -35,4 +35,29 @@ ros distro
 - followed (https://docs.ros.org/en/jazzy/How-To-Guides/Installing-on-Raspberry-Pi.html#ubuntu-linux-on-raspberry-pi-with-binary-ros-2-install)[these instructions]
 - also (https://docs.ros.org/en/jazzy/How-To-Guides/Installing-on-Raspberry-Pi.html#ubuntu-linux-on-raspberry-pi-with-binary-ros-2-install)[these]
 
+# INFO ON SETTING UP THE REPO TO RUN LAUNCH ON STARTUP
 
+## Boot-on-startup setup
+
+### Install
+
+```bash
+sudo cp scripts/boxes-brain-launch.sh /usr/local/bin/
+sudo chmod +x /usr/local/bin/boxes-brain-launch.sh
+sudo cp systemd/boxes-brain.service /etc/systemd/system/
+sudo cp systemd/journald@boxes.conf /etc/systemd/
+```
+
+### Enable
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now boxes-brain.service
+```
+
+### Verify
+
+```bash
+sudo systemctl status boxes-brain.service
+journalctl --namespace=boxes -u boxes-brain.service -f
+```
